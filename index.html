@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Vice City: Open World Prototype</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#07131c;font-family:Arial,Helvetica,sans-serif;color:#fff}
+#game{position:absolute;inset:0}canvas{display:block;width:100%;height:100%}
+#hud{position:absolute;inset:0;pointer-events:none;text-shadow:0 2px 5px #000}
+#brand{position:absolute;left:22px;top:18px;font-weight:900;font-size:clamp(18px,3vw,30px);letter-spacing:2px;color:#ffcf82}
+#brand small{display:block;color:#d5e9ed;font-size:11px;letter-spacing:4px;margin-top:3px}
+#mission{position:absolute;left:22px;top:84px;background:#07131cd9;border-left:4px solid #ffb54b;padding:12px 15px;max-width:min(420px,78vw);line-height:1.45}
+#mission strong{color:#ffd17b;display:block;margin-bottom:4px}
+#stats{position:absolute;right:20px;top:20px;text-align:right;background:#07131cd9;padding:10px 14px;border-radius:8px;font-weight:bold;line-height:1.7}
+#hint{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:#07131cdd;padding:10px 15px;border-radius:7px;text-align:center;max-width:90vw;font-size:13px}
+#toast{position:absolute;top:45%;left:50%;transform:translate(-50%,-50%);background:#07131ce8;border:1px solid #ffbf5a;padding:18px 24px;border-radius:12px;text-align:center;display:none;max-width:85vw}
+#mapnote{position:absolute;right:20px;bottom:20px;color:#d9e7ea;font-size:11px;opacity:.8}
+#start{position:absolute;inset:0;background:linear-gradient(180deg,#07131cbb,#07131c55),linear-gradient(90deg,#06121a,#143b48);display:flex;align-items:center;justify-content:center;text-align:center;padding:24px}
+#start .panel{max-width:650px;background:#081822eF;border:1px solid #8bb2b755;border-radius:16px;padding:28px;box-shadow:0 20px 70px #0008}
+#start h1{font-size:clamp(30px,6vw,54px);margin:0;color:#ffc56d;letter-spacing:2px}
+#start p{line-height:1.6;color:#d7e5e8}
+button{border:0;border-radius:8px;background:#ffb84f;color:#15212a;font-weight:900;font-size:16px;padding:13px 22px;cursor:pointer}
+#loading{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:white}
+@media(max-width:600px){#stats{font-size:12px;right:10px;top:10px}#brand{left:12px;top:12px}#mission{left:12px;top:75px;font-size:12px}#hint{bottom:10px;font-size:11px}}
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div id="hud">
+ <div id="brand">VICE CITY <small>OPEN WORLD • PROTOTYPE 01</small></div>
+ <div id="mission"><strong id="mname">MISSION 01 — RICO'S FAVOUR</strong><span id="mdesc">Finde den goldenen Marker und fahre hinein.</span></div>
+ <div id="stats">CASH <span id="cash">$500</span><br>STATUS <span id="status">ZU FUSS</span></div>
+ <div id="hint">WASD / Pfeile: bewegen · E: Auto ein-/aussteigen · Leertaste: springen · Maus ziehen: Kamera</div>
+ <div id="toast"></div><div id="mapnote">Fiktive Spielwelt · Eigenständiger Prototyp</div>
+</div>
+<div id="start"><div class="panel">
+<h1>VICE CITY</h1><p>Eine eigenständige Open-World-Crime-Sandbox. Erkunde die Küstenstadt, steige in den roten Sportwagen und erledige drei Aufträge.</p>
+<p><b>Steuerung:</b> WASD oder Pfeiltasten · E zum Ein-/Aussteigen · Leertaste springen · Maus ziehen zum Umschauen</p>
+<p>Auf PS5: Öffne die bereitgestellte Spiel-Webseite. Browser- und Controller-Unterstützung kann je nach PS5-System eingeschränkt sein.</p>
+<button id="play">SPIEL STARTEN</button>
+</div></div>
+<div id="loading">Lade Vice City …</div>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+const host=document.getElementById('game');
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0x8db8ca); scene.fog=new THREE.Fog(0x8db8ca,100,430);
+const camera=new THREE.PerspectiveCamera(68,innerWidth/innerHeight,.1,800);
+const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.8));renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.1;host.appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xc5e8ff,0x34402e,2.0));
+const sun=new THREE.DirectionalLight(0xffd7a0,3.2);sun.position.set(-90,140,70);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-150;sun.shadow.camera.right=150;sun.shadow.camera.top=150;sun.shadow.camera.bottom=-150;scene.add(sun);
+const mat=(color,rough=.8,metal=0)=>new THREE.MeshStandardMaterial({color,roughness:rough,metalness:metal});
+const grass=mat(0x35654b), asphalt=mat(0x252b31,.92), concrete=mat(0x8b9291), white=mat(0xe8e1c8), glass=mat(0x315b68,.24,.35), buildingMats=[mat(0xb7a18b),mat(0x8a9fa4),mat(0xd1bda0),mat(0x617e89,.45,.18),mat(0x9baba9)];
+function box(name,x,y,z,sx,sy,sz,material,cast=true){const o=new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz),material);o.name=name;o.position.set(x,y,z);o.castShadow=cast;o.receiveShadow=true;scene.add(o);return o}
+function cylinder(x,y,z,r1,r2,h,material){const o=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,h,10),material);o.position.set(x,y,z);o.castShadow=true;scene.add(o);return o}
+// Ground and surrounding ocean
+box('Island',0,-1.3,0,520,2,520,grass,false);
+const sea=mat(0x176b83,.28,.25);box('Ocean',0,-2.8,0,1100,1,1100,sea,false);
+// Road grid
+for(let i=-4;i<=4;i++){let p=i*48;
+ box('Road NS',p,-.24,0,13,.2,520,asphalt,false);box('Road EW',0,-.23,p,520,.2,13,asphalt,false);
+ for(let q=-245;q<245;q+=16){box('Lane marking',p,-.12,q,.15,.025,5,white,false);box('Lane marking',q,-.11,p,5,.025,.15,white,false);}
+ box('Sidewalk',p-8,-.12,0,2,.35,520,concrete,false);box('Sidewalk',p+8,-.12,0,2,.35,520,concrete,false);
+ box('Sidewalk',0,-.12,p-8,520,.35,2,concrete,false);box('Sidewalk',0,-.12,p+8,520,.35,2,concrete,false);
+}
+// City blocks, building details and window strips
+let seed=19;function rand(){seed=(seed*16807)%2147483647;return(seed-1)/2147483646}
+for(let gx=-4;gx<=4;gx++)for(let gz=-4;gz<=4;gz++){
+ if(rand()<.1)continue;
+ for(let n=0;n<3;n++){
+  const x=gx*48+(rand()-.5)*25,z=gz*48+(rand()-.5)*25;
+  if(Math.abs(x)<18&&Math.abs(z)<18)continue;
+  const w=9+rand()*9,d=9+rand()*9,h=12+rand()*66;
+  box('Building',x,h/2,z,w,h,d,buildingMats[Math.floor(rand()*buildingMats.length)]);
+  // thin reflective window bands
+  for(let yy=4;yy<h-2;yy+=5){
+   const wm=glass;
+   box('Windows',x,yy,z+d/2+.012,w*.82,.65,.025,wm,false);
+   box('Windows',x+w/2+.012,yy,z,.025,.65,d*.82,wm,false);
+  }
+  if(h>48)box('Rooftop unit',x,h+1,z, w*.35,2,d*.3,concrete);
+ }
+}
+// Palms
+const trunk=mat(0x60422b), leaves=mat(0x1b543e);
+for(let i=0;i<90;i++){
+ const x=(rand()-.5)*450,z=(rand()-.5)*450;
+ if(Math.abs(x%48)<10||Math.abs(z%48)<10)continue;
+ cylinder(x,2.2,z,.34,.55,4.4,trunk);
+ for(let j=0;j<6;j++){const a=j*Math.PI/3;const leaf=new THREE.Mesh(new THREE.ConeGeometry(.48,4.2,5),leaves);leaf.position.set(x+Math.cos(a)*1.5,4.9,z+Math.sin(a)*1.5);leaf.rotation.z=Math.cos(a)*.9;leaf.rotation.x=Math.sin(a)*.8;scene.add(leaf);}
+}
+// Simple distant skyline
+for(let i=0;i<65;i++){const x=(rand()-.5)*470,z=(rand()-.5)*470,h=15+rand()*70;box('Distant tower',x,h/2,z,7+rand()*9,h,7+rand()*9,buildingMats[i%buildingMats.length]);}
+// Player avatar
+const player=new THREE.Group();scene.add(player);player.position.set(0,0,-8);
+const body=new THREE.Mesh(new THREE.CapsuleGeometry(.42,.85,4,8),mat(0x263746));body.position.y=.95;body.castShadow=true;player.add(body);
+const head=new THREE.Mesh(new THREE.SphereGeometry(.25,16,12),mat(0xc58c68));head.position.y=1.75;player.add(head);
+// Red sports car
+const car=new THREE.Group();scene.add(car);car.position.set(4,0,-8);
+const red=mat(0xc51d27,.22,.65),rubber=mat(0x151719,.95),rim=mat(0xb8c0c2,.25,.75);
+// rebuild car geometry as local parts
+const bodycar=new THREE.Mesh(new THREE.BoxGeometry(2,.65,4),red);bodycar.position.y=.7;bodycar.castShadow=true;car.add(bodycar);
+const cabin=new THREE.Mesh(new THREE.BoxGeometry(1.45,.62,1.8),glass);cabin.position.set(0,1.28,-.15);car.add(cabin);
+for(const sx of [-1,1])for(const sz of [-1,1]){const wh=new THREE.Mesh(new THREE.CylinderGeometry(.39,.39,.25,18),rubber);wh.rotation.z=Math.PI/2;wh.position.set(sx*.98,.38,sz*1.25);car.add(wh);const ri=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,.26,16),rim);ri.rotation.z=Math.PI/2;ri.position.copy(wh.position);car.add(ri);}
+const headlight=mat(0xffe6a3,.2,.1);for(const sx of [-.65,.65]){const l=new THREE.Mesh(new THREE.BoxGeometry(.4,.18,.05),headlight);l.position.set(sx,.78,2.02);car.add(l)}
+// Mission markers
+const goals=[new THREE.Vector3(55,0,55),new THREE.Vector3(-95,0,65),new THREE.Vector3(105,0,-105)];
+const marker=new THREE.Group();scene.add(marker);
+const ring=new THREE.Mesh(new THREE.TorusGeometry(3,.22,12,48),mat(0xffb53e,.35,.2));ring.rotation.x=Math.PI/2;ring.position.y=.2;marker.add(ring);
+const beam=new THREE.Mesh(new THREE.CylinderGeometry(.15,.6,7,20,1,true),new THREE.MeshBasicMaterial({color:0xffb53e,transparent:true,opacity:.25,side:THREE.DoubleSide}));beam.position.y=3.5;marker.add(beam);
+let mission=0,cash=500,driving=false,carSpeed=0,heading=0,camYaw=0,camPitch=.22,started=false,toastTimer=0;
+const keys={};addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if(e.key.toLowerCase()==='e')toggleCar();if(e.key===' '){e.preventDefault();if(!driving)player.position.y+=.15}});addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+let dragging=false,lastX=0,lastY=0;renderer.domElement.addEventListener('pointerdown',e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;renderer.domElement.setPointerCapture(e.pointerId)});renderer.domElement.addEventListener('pointerup',()=>dragging=false);renderer.domElement.addEventListener('pointermove',e=>{if(dragging){camYaw-=(e.clientX-lastX)*.006;camPitch=Math.max(-.05,Math.min(.7,camPitch+(e.clientY-lastY)*.003));lastX=e.clientX;lastY=e.clientY}});
+function toggleCar(){if(!started)return;if(!driving&&player.position.distanceTo(car.position)<5){driving=true;player.visible=false;document.getElementById('status').textContent='IM AUTO';showToast('Fahrzeug betreten');}else if(driving){driving=false;player.visible=true;player.position.copy(car.position).add(new THREE.Vector3(2.4,0,0));document.getElementById('status').textContent='ZU FUSS';showToast('Fahrzeug verlassen');}}
+function showToast(s){const el=document.getElementById('toast');el.textContent=s;el.style.display='block';toastTimer=2.3}
+function updateMissionUI(){const ns=['MISSION 01 — RICO’S FAVOUR','MISSION 02 — HOT DELIVERY','MISSION 03 — ESCAPE THE HEAT','ALLE MISSIONEN ERLEDIGT'];const ds=['Finde den goldenen Marker in der Stadt.','Liefer das Paket zum nächsten Ziel.','Erreiche das letzte Ziel und schließe den Auftrag ab.','Du hast den ersten Auftragssatz geschafft. Erkunde weiter!'];document.getElementById('mname').textContent=ns[mission];document.getElementById('mdesc').textContent=ds[mission];document.getElementById('cash').textContent='$'+cash;marker.position.copy(goals[Math.min(mission,2)]);marker.visible=mission<3}
+updateMissionUI();
+document.getElementById('play').onclick=()=>{started=true;document.getElementById('start').style.display='none';document.getElementById('loading').style.display='none';showToast('Willkommen in Vice City');};
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+document.getElementById('loading').style.display='none';
+const clock=new THREE.Clock();
+function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);
+ if(started){
+  const forward=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0),side=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0);
+  if(driving){carSpeed+=(forward*26*dt);carSpeed*=Math.pow(.985,dt*60);carSpeed=Math.max(-12,Math.min(42,carSpeed));heading+=side*dt*carSpeed*.045;car.rotation.y=heading;car.position.x+=Math.sin(heading)*carSpeed*dt;car.position.z+=Math.cos(heading)*carSpeed*dt;car.position.y=0;document.getElementById('status').textContent='IM AUTO · '+Math.round(Math.abs(carSpeed)*5)+' KM/H';}
+  else {const ang=camYaw;const dx=(Math.sin(ang)*forward+Math.cos(ang)*side)*6*dt;const dz=(Math.cos(ang)*forward-Math.sin(ang)*side)*6*dt;player.position.x+=dx;player.position.z+=dz;if(Math.abs(dx)+Math.abs(dz)>.001)player.rotation.y=Math.atan2(dx,dz);}
+  const focus=driving?car:player;const distance=driving?9:7;const target=new THREE.Vector3(focus.position.x+Math.sin(camYaw)*distance,focus.position.y+(driving?2.6:2.2)+camPitch*4,focus.position.z-Math.cos(camYaw)*distance);
+  camera.position.lerp(target,1-Math.exp(-5*dt));camera.lookAt(focus.position.x,focus.position.y+(driving?1.1:1.2),focus.position.z);
+  if(mission<3&&focus.position.distanceTo(goals[mission])<6){cash+=mission===0?500:mission===1?900:1500;mission++;updateMissionUI();showToast(mission<3?'MISSION ERFOLGREICH · + CASH':'ALLE MISSIONEN ERLEDIGT · BONUS ERHALTEN');}
+  marker.rotation.y+=dt*.7;marker.position.y=.2+Math.sin(performance.now()*.002)*.25;
+  if(toastTimer>0){toastTimer-=dt;if(toastTimer<=0)document.getElementById('toast').style.display='none'}
+ }
+ renderer.render(scene,camera);
+}
+animate();
+</script>
+</body></html>
